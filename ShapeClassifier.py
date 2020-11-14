@@ -16,7 +16,7 @@ import numpy as np
 
 class ShapeClassifier:
 
-    # initialize important variables
+    # Inisiasi Variabel
     def __init__(self, verbose=1):
         self.verbose = verbose
         self.image_path = None
