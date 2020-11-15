@@ -20,7 +20,7 @@ class ShapeClassifier:
     def __init__(self, verbose=1):
         self.verbose = verbose
         self.image_path = None
-        # color boundaries used to perform color based segmentation
+        # batas warna yang digunakan untuk melakukan segmentasi berbasis warna
         self.colors = {
             "low_red": np.array([0, 193, 110]),
             "high_red": np.array([185, 255, 255]),
@@ -33,56 +33,56 @@ class ShapeClassifier:
         }
 
     def _countors_based_segmentation(self, _image, contours, flag):
-        # compute image area
+        # menghitung area gambar
         _area_image = _image.shape[0] * _image.shape[1]
-        # seperate contours with area greater than 30% of image area
+        # pisahkan kontur dengan luas lebih dari 30% dari area gambar
         _large_area_contours = [cnt for cnt in contours if cv2.contourArea(cnt) / _area_image > 0.3]
 
-        # if no contours has area greater than 30% of image area
+        # jika tidak ada kontur yang memiliki luas lebih dari 30% dari luas gambar
         if len(_large_area_contours) == 0:
             if flag == 0:
-                # perform color based segmentation
+                # melakukan segmentasi berbasis warna
                 self.color_based_segmentation(_image)
             else:
-                # perform box prediction using small contours
+                # melakukan prediksi kotak menggunakan kontur kecil
                 box_params = self.box_prediction(contours)
                 if self.verbose == 1:
-                    # display results
+                    # menampilkan hasil
                     self.display_box_results(_image, contours, box_params)
                 else:
                     if len(box_params) > 0:
                         print("{}: {}".format(self.image_path, box_params[4]))
             return
 
-        # extract the contour having smallest ratio of its perimeter to its area
-        # removes contours with irregular shapes
+        # ekstrak kontur yang memiliki rasio keliling terkecil terhadap luasnya
+        # menghilangkan kontur dengan bentuk tidak beraturan
         min_ratio = min([cv2.arcLength(cnt, True) / cv2.contourArea(cnt) for cnt in _large_area_contours])
         max_cnt = [cnt for cnt in _large_area_contours
                    if cv2.arcLength(cnt, True) / cv2.contourArea(cnt) == min_ratio][0]
 
-        # draw all contours
+        # gambar semua kontur
         mask_cnt_all = np.zeros((_image.shape[0], _image.shape[1]), dtype=np.uint8)
         cv2.drawContours(mask_cnt_all, contours, -1, 255, thickness=cv2.FILLED)
 
-        # draw the one extracted before
+        # gambar yang diekstrak sebelumnya
         mask_cnt = np.zeros((_image.shape[0], _image.shape[1]), dtype=np.uint8)
         cv2.drawContours(mask_cnt, [max_cnt], -1, 255, thickness=cv2.FILLED)
 
-        # do some morphological operations to remove small regions
+        # melakukan beberapa operasi morfologi untuk menghilangkan daerah kecil
         kernel = np.ones((5, 5), dtype=np.uint8)
         mask_cnt = cv2.erode(mask_cnt, kernel, mask_cnt, iterations=1)
 
-        # again find contours and extract the one with largest area
+        # sekali lagi temukan kontur dan ekstrak satu dengan area terluas
         contours, hierarchy = cv2.findContours(mask_cnt, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
         max_cnt = max(contours, key=cv2.contourArea)
 
-        # perform convextHull operation which fills the holes inside a broken shape
+        # melakukan operasi convextHull yang mengisi lubang di dalam bentuk yang rusak
         mask_covex = np.zeros((_image.shape[0], _image.shape[1]), dtype=np.uint8)
         max_cnt_convex = cv2.convexHull(max_cnt)
         cv2.drawContours(mask_covex, [max_cnt_convex], -1, 255, thickness=cv2.FILLED)
         shape = self._detect_shape_contours_approx(max_cnt_convex)
 
-        # display results
+        # menampilkan hasil
         if self.verbose == 1:
             self.display_contours_restuls(_image, mask_cnt_all, mask_cnt, mask_covex, shape)
         else:
@@ -90,37 +90,37 @@ class ShapeClassifier:
         return None
 
     def color_based_segmentation(self, image):
-        # convert image to different formats
+        # mengonversi gambar ke format yang berbeda
         frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         hsv_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
 
-        # create masks for colors using inRange method
+        # membuat masks untuk warna menggunakan metode inRange
         green_mask = cv2.inRange(hsv_frame, self.colors["low_green"], self.colors["high_green"])
         yellow_mask = cv2.inRange(hsv_frame, self.colors["low_yellow"], self.colors["high_yellow"])
 
-        # performing bitwise operation to extract the region from the image containing specific color
+        # melakukan operasi bitwise untuk mengekstrak wilayah dari gambar yang mengandung warna tertentu
         green = cv2.bitwise_and(frame, frame, mask=green_mask)
         yellow = cv2.bitwise_and(frame, frame, mask=yellow_mask)
         _width = frame.shape[0]
         _height = frame.shape[1]
         _frame_area = _width * _height
 
-        # method to return the contours from the segmented region
+        # method untuk mengembalikan kontur dari wilayah tersegmentasi
         def _return_contours(_segment):
             _gray = cv2.cvtColor(_segment, cv2.COLOR_BGR2GRAY)
             _ret, _threshold = cv2.threshold(_gray, 80, 255, cv2.THRESH_BINARY)
             _contours, _hierarchy = cv2.findContours(_threshold, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
             return _contours
 
-        # combine all contours found
+        # gabungkan semua kontur yang ditemukan
         cnt_to_consider = []
         for mask in [yellow, green]:
             cnt_to_consider = [*cnt_to_consider,
                                *[cnt for cnt in _return_contours(mask) if cv2.contourArea(cnt) > _frame_area * 0.01]]
 
-        # check if the shape of image tells the shape of the road sign :)
+        # periksa apakah bentuk gambar memberitahu bentuk bangun
         if _width > _height and (_height / _width) < 0.7 or _width < _height and (_width / _height) < 0.7:
-            # if so, then directly predict the box
+            # jika demikian, maka langsung prediksi kotaknya
             params = self.box_prediction(cnt_to_consider)
             if self.verbose == 1:
                 self.display_box_results(image, cnt_to_consider, params)
@@ -128,58 +128,58 @@ class ShapeClassifier:
                 if len(params) > 0:
                     print("{}: {}".format(self.image_path, params[4]))
 
-        # else we need to proceess the contours again for shape prediction
+        # jika tidak, kita perlu memproses kontur lagi untuk prediksi bentuk
         else:
             self._countors_based_segmentation(frame, cnt_to_consider, flag=1)
 
     def _detect_shape_contours_approx(self, cnt):
-        # finding the vertices of the contours using openCV buildin function
+        # menemukan simpul dari kontur menggunakan fungsi buildin openCV
         _perimeter = cv2.arcLength(cnt, True)
         _vertices = cv2.approxPolyDP(cnt, 0.012 * _perimeter, True)
         shape = "unknown"
 
-        # classifying the shape based on the number of vertices
+        # mengklasifikasikan bentuk berdasarkan jumlah simpul
         if len(_vertices) == 3:
             shape = "triangle"
         elif len(_vertices) == 4:
-            # if shape has four vertices, then it can be either
-            # 1. square
-            # 2. Verticle Rectangle
-            # 3. Horizontal Rectangle OR
+            # jika bentuk memiliki empat simpul, maka bisa jadi
+            # 1. Persegi
+            # 2. Persegi panjang vertikal
+            # 3. Persegi panjang horizontal
             # 4. Diamond
             (x, y, w, h) = cv2.boundingRect(_vertices)
             if h != 0:
                 _ratio = w / float(h)
-                # a square have an aspect ratio ~ 1.0
+                # persegi memiliki rasio aspek ~ 1,0
                 if 0.85 <= _ratio <= 1.15:
                     _v_diff_1 = abs(_vertices[0][0][1] - _vertices[1][0][1])
                     _v_diff_2 = abs(_vertices[0][0][1] - _vertices[3][0][1])
                     _thresh = h * 0.1
                     if _v_diff_1 > _thresh and _v_diff_2 > _thresh:
-                        shape = "diamond"
+                        shape = "Diamond"
                     else:
-                        shape = "square"
+                        shape = "Persegi"
                 else:
-                    shape = "horizontal rectangle" if w > h else "vertical rectangle"
+                    shape = "Persegi Panjang Horizontal" if w > h else "Persegi Panjang Vertikal"
         elif len(_vertices) == 5 or len(_vertices) == 6:
-            shape = "pentagon"
+            shape = "Segi Lima"
         elif len(_vertices) == 7:
-            shape = "heptagon"
+            shape = "Segi Tujuh"
         elif len(_vertices) == 8:
-            shape = "octagon"
+            shape = "Segi Delapan"
         else:
-            shape = "circle"
+            shape = "Lingkaran"
         return shape
 
     def box_prediction(self, contours):
         boxes = []
         box_params = []
-        # compute boxes for all contours
+        # menghitung kotak untuk semua kontur
         for c in contours:
             (x, y, w, h) = cv2.boundingRect(c)
             boxes.append([x, y, x + w, y + h])
 
-        # then combining all small boxes the predict one large box
+        # kemudian menggabungkan semua kotak kecil untuk memprediksi satu kotak besar
         if len(boxes) > 0:
             boxes = np.asarray(boxes)
             left, top = np.min(boxes, axis=0)[:2]
@@ -191,30 +191,30 @@ class ShapeClassifier:
             if 0.90 <= _ratio <= 1.10:
                 shape = 'square'
             else:
-                shape = 'vertical rectangle' if _box_width < _box_height else 'horizontal rectangle'
+                shape = 'Persegi Panjang Vertikal' if _box_width < _box_height else 'Persegi Panjang Horizontal'
             box_params = [left, top, right, bottom, shape]
         return box_params
 
     def display_contours_restuls(self, image, cnts, extracted_cnts, processed_cnt, shape):
-        # display all images
+        # tampilkan semua gambar
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         fig, axes = plt.subplots(nrows=1, ncols=5, figsize=(16, 4))
-        fig.suptitle('Shape Detected: {}'.format(shape), fontsize=16)
+        fig.suptitle('Bangun Terdeteksi: {}'.format(shape), fontsize=16)
         axes[0].imshow(image)
-        axes[0].title.set_text("Quantized Image (KMeans)")
+        axes[0].title.set_text("Gambar Terkuantisasi(KMeans)")
         axes[1].imshow(gray, cmap='gray')
-        axes[1].title.set_text("Gray Scaled Image")
+        axes[1].title.set_text("Gambar Skala Abu-abu")
         axes[2].imshow(cnts, cmap='gray')
-        axes[2].title.set_text("Large Area Contours")
+        axes[2].title.set_text("Kontur Area Besar")
         axes[3].imshow(extracted_cnts, cmap='gray')
-        axes[3].title.set_text("Single Contour Extracted")
+        axes[3].title.set_text("Kontur Tunggal Diekstraksi")
         axes[4].imshow(processed_cnt, cmap='gray')
-        axes[4].title.set_text("Filled Holes")
+        axes[4].title.set_text("Lubang yang Diisi")
         plt.show()
 
     def display_box_results(self, image, contours, params):
-        # display all images
+        # tampilkan semua gambar
         if len(params) > 0:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -226,15 +226,15 @@ class ShapeClassifier:
             mask_box = cv2.rectangle(mask_box, (params[0], params[1]), (params[2], params[3]), 255, thickness=-1)
 
             fig, axes = plt.subplots(nrows=1, ncols=4, figsize=(16, 5))
-            fig.suptitle('Shape Detected: {}'.format(params[4]), fontsize=16)
+            fig.suptitle('Bangun Terdeteksi: {}'.format(params[4]), fontsize=16)
             axes[0].imshow(image)
-            axes[0].title.set_text("Quantized Image (KMeans)")
+            axes[0].title.set_text("Gambar Terkuantisasi(KMeans)")
             axes[1].imshow(gray, cmap='gray')
-            axes[1].title.set_text("Gray Scaled Image")
+            axes[1].title.set_text("Gambar Skala Abu-abu")
             axes[2].imshow(mask_contours, cmap='gray')
-            axes[2].title.set_text("Countors Detected")
+            axes[2].title.set_text("Kontur Terdeteksi")
             axes[3].imshow(mask_box, cmap='gray')
-            axes[3].title.set_text("Bounding Box Prediction")
+            axes[3].title.set_text("Prediksi Bounding Box")
             plt.show()
 
     def preprcess_image(self, _image, n=8):
@@ -246,25 +246,25 @@ class ShapeClassifier:
         quant = clt.cluster_centers_.astype("uint8")[labels]
         quant = quant.reshape((h, w, 3))
         _image = _image.reshape((h, w, 3))
-        # convert from L*a*b* to RGB
+        # mengkonversi dari L*a*b* ke RGB
         quant = cv2.cvtColor(quant, cv2.COLOR_LAB2BGR)
         return quant
 
     def predict_shape(self, image_path):
         self.image_path = image_path
-        # read the image
+        # baca gambarnya
         _image = cv2.imread(image_path)
-        # preprocess the image
+        # praproses gambar
         _image_quantized = self.preprcess_image(_image)
 
-        # convert image to grayscale and blur it using Gaussian blur
+        # mengubah gambar menjadi skala abu-abu dan memberi efek blur menggunakan Gaussian blur
         _image_grey = cv2.cvtColor(_image_quantized, cv2.COLOR_BGR2GRAY)
         _image_grey = cv2.GaussianBlur(_image_grey, (3, 3), 0)
-        # perform canny edge detection
+        # melakukan deteksi canny edge
         _edges = cv2.Canny(_image_grey, 50, 200, None, 3)
 
-        # detect contours using a builtin function
+        # mendeteksi kontur menggunakan fungsi bawaan
         contours, hierarchy = cv2.findContours(_edges, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
         cnt_closed = [cnt for i, cnt in enumerate(contours) if hierarchy[0][i][2] != -1]
-        # pass the contours for further processing
+        # lewati kontur untuk diproses lebih lanjut
         self._countors_based_segmentation(_image, cnt_closed, flag=0)
